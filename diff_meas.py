@@ -12,7 +12,7 @@ reps = freq * t_total
 wait = 60/freq
 
 #open files to write capacitances to (in pF)
-fh1 = open("cap1.txt", "a")
+fh1 = open("capdiff.txt", "a")
 
 import struct
 import time
@@ -23,10 +23,9 @@ adr = 0x50
 
 #open Bus 2 to configure measurements: CIN1 (bus will close automatically after indented code completed)
 with SMBusWrapper(2) as bus:
-    #configure meas1 at 0x08, positive input CIN1, no negative input, no offset capacitance,...
+    #configure meas1 at 0x08, positive input CIN1, negative input CIN2, no offset capacitance,...
     #set to 0x1C00 (endianess reversed)
-    bus.write_word_data(adr,0x08,0x001C)
-    #bus.write_word_data(adr,0x08,0x0012)
+    bus.write_word_data(adr,0x08,0x0004)
 
 #initalize rep count
 x = 0
@@ -59,7 +58,7 @@ while x < reps:
 
     #calculate twos complement and convert measurements to pF
     if (1 == (twos1>>23)):
-        Cap1 = (twos1-(1<<24))/2**19
+        Cap1 = (twos1 - (1<<24))/2**19
     else:
         Cap1 = twos1/(2**19)
 

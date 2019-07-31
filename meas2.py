@@ -17,6 +17,7 @@ fh2 = open("capB.txt", "a")
 import struct
 import time
 from smbus2 import SMBusWrapper
+from statistics import variance, mean
 
 #define fdc1004 i2c address
 adr = 0x50
@@ -30,9 +31,11 @@ with SMBusWrapper(2) as bus:
     #congfigure meas2 at 0x09, positive input CIN2, no negative input, no offset capacitance,...
     #set to 0x 3C00 (endianess reversed)
     bus.write_word_data(adr,0x09,0x003C)
+    #bus.write_word_data(adr,0x09,0x0032)
 
 #initalize rep count
 x = 0
+data1, data2 = [], []
 #begin measuring, runtime for one loop iteration about 0.01s and is ignored in reps estimate
 while x < reps:
     #open i2c bus to aquire meas1, meas2  data.  Wait time is distributed betweem i2c queries to 
@@ -83,7 +86,7 @@ while x < reps:
 
     #calculate twos complement and convert measurements to pF
     if (1 == (twos1>>23)):
-        Cap1 = (-(~twos1+1))/2**19
+        Cap1 = (twos1-(1<<24))/2**19
     else:
         Cap1 = twos1/(2**19)
 
@@ -92,11 +95,10 @@ while x < reps:
     fh1.seek(0,2)
     line = fh1.write(Caps1)
 
-
-
+    data1.append(Cap1)
 
     if (1 == (twos2>>23)):
-        Cap2 = (-(~twos2+1))/2**19
+        Cap2 = (twos2-(1<<24))/2**19
     else:
         Cap2 = twos2/(2**19)
 
@@ -106,7 +108,15 @@ while x < reps:
     fh2.seek(0,2)
     line = fh2.write(Caps2)
 
+    data2.append(Cap2)
+
     x += 1
+    if not x%10:
+        print("ch1: ", data1)
+        print("ch2: ", data2)
+        print("ch1 mean: %f, ch2 mean: %f" %(mean(data1),mean(data2)))
+        print("ch1 SD: %f, ch2 SD: %f" %(variance(data1)**0.5, variance(data2)**0.5))
+        data1, data2 = [], []
 
 fh1.close()
 fh2.close()
