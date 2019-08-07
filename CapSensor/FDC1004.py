@@ -4,9 +4,9 @@ import struct
 class Chip():
     config_reg = 0x0C
 
-    def __init__(self, measurements, rate=0b01):
+    def __init__(self, measurements, measure_rate=0b01):
         self.meas = {m.num: m for m in measurements}
-        self.rate = rate
+        self.rate = measure_rate
         self.reset()
 
     def trigger(self):
