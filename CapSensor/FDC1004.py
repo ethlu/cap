@@ -62,6 +62,9 @@ class Measurement():
     def __init__(self, meas_num): 
         assert 1 <= meas_num <= 4
         self.num = meas_num
+        self.config_reg = Measurement.config_regs[meas_num - 1]
+        self.MSB_reg = Measurement.MSB_regs[meas_num - 1]
+        self.LSB_reg = Measurement.LSB_regs[meas_num - 1]
         self.data = []
         self.timeline = []
 
@@ -78,11 +81,11 @@ class Measurement():
 
     def _write_config(self):
         config_word = self.CHA<<13 | self.CHB<<10 | self.CAPDAC<<5 
-        reg_write(Measurement.config_regs[self.num - 1], config_word)
+        reg_write(self.config_reg, config_word)
 
     def _read(self, time):
-        MSB = reg_read(Measurement.MSB_regs[self.num - 1]) 
-        LSB = reg_read(Measurement.LSB_regs[self.num - 1]) 
+        MSB = reg_read(self.MSB_reg) 
+        LSB = reg_read(self.LSB_reg) 
         twos = (MSB<<8) + (LSB>>8)
 
         if (1 == (twos>>23)):

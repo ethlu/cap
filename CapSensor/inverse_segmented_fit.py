@@ -13,25 +13,24 @@ def generate_cal(caps, dists, regions, minimum_sample):
     r, i, j = 0, 0, 0
     r_max = len(regions)
     j_max = dists.size
-    coefficients = []
+    A = []
     while r < r_max and j < j_max:
         if dists[j] >= regions[r]:
             j += 1
         else:
             if j - i < minimum_sample:
                 raise Exception('too few samples at: {}'.format(regions[r]))
-            coefficients.append(np.polyfit(inverse_dists[i:j], caps[i:j],1))
+            A.append(np.polyfit(inverse_dists[i:j], caps[i:j],1)[0])
             i = j
             r += 1
 
     if r == r_max - 1:
         if j - i < minimum_sample:
             raise Exception('too few samples at: {}'.format(regions[r]))
-        coefficients.append(np.polyfit(inverse_dists[i:j], caps[i:j],1))
+        A.append(np.polyfit(inverse_dists[i:j], caps[i:j],1)[0])
     elif r < r_max:
         raise Exception('no sample beyond: {}'.format(regions[r]))
 
-    A = np.array(coefficients)[:,0]
     B = [0]
     for i in range(1, r_max):
         B.append((A[i-1] - A[i])/regions[i-1] + B[-1])
@@ -48,15 +47,15 @@ def dist_estimate(cal, cap_offsetted):
         i += 1
     return A[i]/(cap_offsetted - B[i])
 
-def dists_estimate(cal, caps_offsetted):
+def dists_estimate(cal, caps, offset):
     A, B, C, D = cal
-    if caps_offsetted[0] >= C[-1]:
+    if caps[0] >= C[-1]:
         raise Exception('cap too high')
     i = 0
-    while caps_offsetted[0] >= C[i]:
+    while caps[0] >= C[i]:
         i += 1
     a, b = A[i], B[i]
-    return [a/(cap - b) for cap in caps_offsetted]
+    return [a/(cap - offset- b) for cap in caps]
 
 def cap_offsetted_estimate(cal, dist):
     A, B, C, D= cal
