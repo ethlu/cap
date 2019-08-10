@@ -1,7 +1,7 @@
 from smbus2 import SMBusWrapper
 import struct
 
-class Chip():
+class Chip:
     config_reg = 0x0C
 
     def __init__(self, measurements, measure_rate=0b01):
@@ -54,7 +54,7 @@ class Chip():
         status = reg_read(Chip.config_reg)
         return [n + 1 for n in range(4) if status & 1<<(3-n)]
 
-class Measurement():
+class Measurement:
     config_regs = (0x08, 0x09, 0x0A, 0x0B)
     MSB_regs = (0x00, 0x02, 0x04, 0x06)
     LSB_regs = (0x01, 0x03, 0x05, 0x07)

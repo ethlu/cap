@@ -91,7 +91,6 @@ if __name__ == "__main__":
     print(cal)
     print(oe)
     print(dist_estimate(cal, 2.65-oe))
-    print(dists_estimate(cal, (2.64-oe, 2.65-oe)))
 
     csvfile = "cal.csv"
     write_cal(cal, csvfile)

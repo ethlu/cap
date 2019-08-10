@@ -29,27 +29,30 @@ print("3 data", data2)
 print("2 data", data1)
 
 """
-cap = CapDist(["cal.csv"], 0.4)
-POLL_FREQ = 300
+cap = CapDist(["cal.csv"], [1,0.4])
+POLL_FREQ = 100
 
 i = 1
 init = 0
 while True:
     time.sleep(1/POLL_FREQ)
-    chip.poll(time.time())
+    print(chip.poll(time.time()))
 
-    if not (i%100): 
+    if not (i%10): 
         #data, timeline = chip.get_data(1)
         data2, timeline = chip.get_data(2)
         cap.fill_caps(data2, timeline)
+        print("freq: ", len(timeline)/(timeline[-1] - timeline[0]))
         if not init:
             cap.set_offset(mean(data2), 10)
             init = 1
         #print("2 data", data)
         #print("2 data", timeline)
-        print("3 data", data2)
-        print("3 time", timeline)
+        #print("3 data", data2)
+        #print("3 time", timeline)
         if not i%300: 
-            print("caps", cap.poll_dists())
+            dists = cap.poll_dists()
+            for d in dists:
+                print("caps", d)
     i+=1
     
