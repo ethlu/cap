@@ -8,6 +8,7 @@ class CapDist:
             self.cal = fit.read_cal(cal_args[0])
         else:
             self.cal = fit.generate_cal(*cal_args)
+        self.init = False
         self.offset = 0
         self.origin = 0
         self.dists, self.times = [], []
@@ -15,6 +16,7 @@ class CapDist:
 
     def set_offset(self, *args):
         self.offset = self.fit.cap_offset(self.cal, *args)
+        self.init = True
 
     def set_origin(self, origin_dist):
         self.origin = origin_dist

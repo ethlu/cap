@@ -6,32 +6,36 @@ import warnings
 from FDC1004 import Chip, Measurement
 from Cap import CapDist
 import inverse_segmented_fit
+from statistics import mean
+import csv
 
 on_rtd = os.environ.get('READTHEDOCS') == 'True'
 if not on_rtd:
     from ocs import ocs_agent, site_config
     from ocs.ocs_twisted import TimeoutLock
 
-TIME_INTERVALS = [1 ,10]
+CHANNELS = 2
 CAL_FILES = ["cal1.csv", "cal2.csv"]
 POLL_FREQUENCY = 300
 SEND_FREQEUNCY = 1
-CHANNELS = 2
+TIME_INTERVALS = [1 ,10]
 
 class CapSensor_Agent:
     def __init__(self, agent):
         self.agent: ocs_agent.OCSAgent = agent
         self.lock = TimeoutLock()
         self.meas_cap = {}
+
         for i in range(CHANNELS):
             ch = Measurement(i + 1)
             ch.config(i)
-            self.meas_cap[ch] = CapDist([CAL_FILES[i]], TIME_INTERVALS)
+            self.agent.register_feed("Cap Meas {}".format(i + 1))
+            self.meas_cap[ch] = [CapDist([CAL_FILES[i]], TIME_INTERVALS)]
+
         self.initialized = False
         self.take_data = False
         self.f_poll = POLL_FREQUENCY
-        self.send_interval = self.f_poll/SEND_FREQUENCy
-        self.caps, self.timeline = [], []
+        self.send_interval = self.f_poll/SEND_FREQUENCY
 
     def init_task(self, session, params=None):
         if params is None:
@@ -67,11 +71,6 @@ class CapSensor_Agent:
 
         Task to start data acquisition.
 
-        Args:
-
-            sampling_frequency (float):
-                Sampling frequency for data collection. Defaults to 2.5 Hz
-
         """
         if params is None:
             params = {}
@@ -85,36 +84,42 @@ class CapSensor_Agent:
                 return False, "Could not acquire lock."
 
             session.set_status('running')
-
             self.take_data = True
+
             i = 0
             while self.take_data:
                 self.chip.poll(time.time())
+
                 if i == self.send_interval:
-                    data = {}
+                    for meas, capdists in self.meas_cap.items():
+                        cap_data = {}
+                        cap_name = "Cap Meas {}".format(meas.meas_num)
 
-                    data = {
-                        'timestamps': 
-                        'block_name': 'temps',
-                        'data': {}
-                    }
-                    for meas, capdist in self.meas_cap.items():
                         caps, timeline = meas.get_data()
-                        cap_name = "Cap Meas {}".format(
-                        capdist.fill_caps(caps)
-                        
-                     
 
-                    for chan in self.module.channels:
-                        chan_string = "Channel {}".format(chan.channel_num)
-                        data['data'][chan_string + ' T'] = chan.get_reading(unit='K')
-                        data['data'][chan_string + ' V'] = chan.get_reading(unit='S')
+                        cap_data['block_name'] = cap_name
+                        cap_data['timestamps'] = timeline
+                        cap_data['data'] = caps
+                        self.agent.publish_to_feed(cap_name, cap_data)
 
-                    self.agent.publish_to_feed('temperatures', data)
+                        for n, capdist in enumerate(capdists):
+                            if not capdist.init:
+                                continue
+                            dist_data = {}
+                            dist_name = "Dist Meas {}, Cal {}".format(meas.meas_num, n)
+                            capdist.fill_caps(caps, timeline)
+                            dists = capdist.poll_dists()[1]
+                            dist_data['block_name'] = dist_name
+                            dist_data['timestamps'] = dists[1]
+                            dist_data['data'] = dists[0]
+                            self.agent.publish_to_feed(dist_name, dist_data)
+                    i = 0
 
                 time.sleep(sleep_time)
+                i += 1
 
-            self.agent.feeds['temperatures'].flush_buffer()
+            for feed in self.agent.feeds.values():
+                feed.flush_buffer()
 
         return True, 'Acquisition exited cleanly.'
 
@@ -128,3 +133,80 @@ class CapSensor_Agent:
         else:
             return False, 'acq is not currently running'
 
+    def offset(self, session, params):
+        if not self.take_data:
+            return False, 'acq should be running while calibrating'
+        meas_num = params['meas_num']
+        meas = self.chip.measurements[meas_num]
+        dist = params['dist']
+        wait_time = params.get('wait_time', 10)
+        set_origin = params.get('set_origin', False)
+        logfile = params.get('logfile', None)
+
+        session.set_status('running')
+        capdists = self.meas_cap.pop(meas)
+        start_time = time.time()
+        time.sleep(wait_time)
+        avg_cap = mean(meas.data)
+
+        for n, capdist in enumerate(capdists):
+            if not capdist.init:
+                self.agent.register_feed("Dist Meas {}, Cal {}".format(meas_num, n))
+            capdist.set_offset(avg_cap, dist)
+            if set_origin:
+                capdist.set_origin(dist)
+
+        self.meas_cap[meas] = capdists
+
+        if logfile is not None:
+            with open(logfile, 'a') as f:
+                writer = csv.writer(f)
+                writer.writerow([start_time, meas_num, dist, avg_cap])
+
+        return True, "Meas {} calibrated at time {}".format(meas_num, start_time)
+
+def make_parser(parser=None):
+    if parser is None:
+        parser = argparse.ArgumentParser()
+
+    pgroup = parser.add_argument_group('Agent Config')
+    pgroup.add_argument('--mode', type=str, choices=['idle', 'init', 'acq'],
+                        help="Starting action for the agent.")
+
+    return parser
+
+
+def main():
+    p = site_config.add_arguments()
+    parser = make_parser(parser=p)
+
+    args = parser.parse_args()
+
+    # Interpret options in the context of site_config.
+    site_config.reparse_args(args, 'CapAgent')
+
+    # Automatically acquire data if requested (default)
+    init_params = False
+    if args.mode == 'init':
+        init_params = {'auto_acquire': False}
+    elif args.mode == 'acq':
+        init_params = {'auto_acquire': True}
+
+    agent, runner = ocs_agent.init_site_agent(args)
+
+    kwargs = {}
+
+    cap = CapSensor_Agent(agent, **kwargs)
+
+    agent.register_task('init_cap', cap.init_task,
+                        startup=init_params)
+    agent.register_task('offset', cap.offset)
+    agent.register_process('acq', cap.acq, cap.stop_acq)
+
+    runner.run(agent, auto_reconnect=True)
+    
+    if args.mode != 'idle':
+        agent.start('init_cap')
+
+if __name__ == '__main__':
+    main()
