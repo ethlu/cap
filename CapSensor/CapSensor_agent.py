@@ -14,23 +14,34 @@ if not on_rtd:
     from ocs import ocs_agent, site_config
     from ocs.ocs_twisted import TimeoutLock
 
-CHANNELS = 2
-CAL_FILES = ["cal1.csv", "cal2.csv"]
 POLL_FREQUENCY = 300
-SEND_FREQEUNCY = 1
-TIME_INTERVALS = [1 ,10]
+SEND_FREQUENCY = 0.2
+
+def meas_cap_builder():
+    TIME_INTERVALS = [1 ,10]
+    meas_cap = {}
+
+    ch1 = Measurement(1)
+    ch1.config(0)
+    cal1 = [CapDist(["cal.csv"], TIME_INTERVALS)]
+    meas_cap[ch1] = cal1
+
+    ch2 = Measurement(2)
+    ch2.config(1)
+    cal2 = [CapDist(["cal.csv"], TIME_INTERVALS)]
+    meas_cap[ch2] = cal2
+
+    return meas_cap
+
 
 class CapSensor_Agent:
     def __init__(self, agent):
-        self.agent: ocs_agent.OCSAgent = agent
+        self.agent = agent
         self.lock = TimeoutLock()
-        self.meas_cap = {}
+        self.meas_cap = meas_cap_builder()
 
-        for i in range(CHANNELS):
-            ch = Measurement(i + 1)
-            ch.config(i)
-            self.agent.register_feed("Cap Meas {}".format(i + 1))
-            self.meas_cap[ch] = [CapDist([CAL_FILES[i]], TIME_INTERVALS)]
+        for meas in self.meas_cap:
+            self.agent.register_feed("Cap{}".format(meas.num), record=True)
 
         self.initialized = False
         self.take_data = False
@@ -93,26 +104,27 @@ class CapSensor_Agent:
                 if i == self.send_interval:
                     for meas, capdists in self.meas_cap.items():
                         cap_data = {}
-                        cap_name = "Cap Meas {}".format(meas.meas_num)
+                        cap_name = "Cap{}".format(meas.num)
 
                         caps, timeline = meas.get_data()
 
                         cap_data['block_name'] = cap_name
                         cap_data['timestamps'] = timeline
-                        cap_data['data'] = caps
+                        cap_data['data'] = {cap_name: caps}
                         self.agent.publish_to_feed(cap_name, cap_data)
 
                         for n, capdist in enumerate(capdists):
                             if not capdist.init:
                                 continue
-                            dist_data = {}
-                            dist_name = "Dist Meas {}, Cal {}".format(meas.meas_num, n)
                             capdist.fill_caps(caps, timeline)
-                            dists = capdist.poll_dists()[1]
-                            dist_data['block_name'] = dist_name
-                            dist_data['timestamps'] = dists[1]
-                            dist_data['data'] = dists[0]
-                            self.agent.publish_to_feed(dist_name, dist_data)
+                            dists = capdist.poll_dists()
+                            for i, intvl in enumerate(dists):
+                                dist_data = {}
+                                dist_name = "Dist{}_Cal{}_Intvl{}".format(meas.num, n, i)
+                                dist_data['block_name'] = dist_name
+                                dist_data['timestamps'] = intvl[1]
+                                dist_data['data'] = {dist_name: intvl[0]}
+                                self.agent.publish_to_feed(dist_name, dist_data)
                     i = 0
 
                 time.sleep(sleep_time)
@@ -137,9 +149,10 @@ class CapSensor_Agent:
         if not self.take_data:
             return False, 'acq should be running while calibrating'
         meas_num = params['meas_num']
-        meas = self.chip.measurements[meas_num]
+        meas = self.chip.meas[meas_num]
         dist = params['dist']
         wait_time = params.get('wait_time', 10)
+        min_sample = params.get('min_sample', 100)
         set_origin = params.get('set_origin', False)
         logfile = params.get('logfile', None)
 
@@ -147,11 +160,28 @@ class CapSensor_Agent:
         capdists = self.meas_cap.pop(meas)
         start_time = time.time()
         time.sleep(wait_time)
-        avg_cap = mean(meas.data)
+
+        if len(meas.data) < min_sample:
+            self.meas_cap[meas] = capdists
+            return False, 'too few samples'
+        
+        done = False
+        for _ in range(10):
+            try:
+                avg_cap = mean(meas.data)
+                done = True
+                break
+            except Exception:
+                continue
+        if not done:
+            self.meas_cap[meas] = capdists
+            return False, 'try again'
 
         for n, capdist in enumerate(capdists):
             if not capdist.init:
-                self.agent.register_feed("Dist Meas {}, Cal {}".format(meas_num, n))
+                for i in range(len(capdist.avgs) + 1):
+                    self.agent.register_feed("Dist{}_Cal{}_Intvl{}".format(meas_num, n, i),
+                        record = True)
             capdist.set_offset(avg_cap, dist)
             if set_origin:
                 capdist.set_origin(dist)
@@ -183,14 +213,13 @@ def main():
     args = parser.parse_args()
 
     # Interpret options in the context of site_config.
-    site_config.reparse_args(args, 'CapAgent')
+    site_config.reparse_args(args, 'CapSensorAgent')
 
-    # Automatically acquire data if requested (default)
-    init_params = False
-    if args.mode == 'init':
-        init_params = {'auto_acquire': False}
-    elif args.mode == 'acq':
+    # Automatically acquire data if requested
+    if args.mode == 'acq':
         init_params = {'auto_acquire': True}
+    else:
+        init_params = {'auto_acquire': False}
 
     agent, runner = ocs_agent.init_site_agent(args)
 

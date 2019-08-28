@@ -1,0 +1,22 @@
+# Site configuration for a fake observatory.
+hub:
+
+  wamp_server: ws://192.168.7.1:8001/ws
+  wamp_http: http://192.168.7.1:8001/call
+  wamp_realm: test_realm
+  address_root: observatory
+  registry_address: observatory.registry
+
+hosts:
+
+  localhost: {
+    'log-dir': './logs',
+    'agent-paths': [
+        '../../'
+        ],
+    'agent-instances': [
+      {'agent-class': 'CapSensorAgent',
+       'instance-id': 'cap',
+       'arguments': [["mode", "acq"]]},
+    ]
+  }
