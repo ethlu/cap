@@ -40,8 +40,14 @@ class CapSensor_Agent:
         self.lock = TimeoutLock()
         self.meas_cap = meas_cap_builder()
 
+        agg_params = {
+            'frame_length': 60,
+        }
+
         for meas in self.meas_cap:
-            self.agent.register_feed("Cap{}".format(meas.num), record=True)
+            self.agent.register_feed("Cap{}".format(meas.num),
+                    record=True,
+                    agg_params=agg_params)
 
         self.initialized = False
         self.take_data = False

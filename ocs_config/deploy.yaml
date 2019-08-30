@@ -1,18 +1,18 @@
 # Site configuration for a fake observatory.
 hub:
 
-  wamp_server: ws://192.168.7.1:8001/ws
-  wamp_http: http://192.168.7.1:8001/call
+  wamp_server: ws://192.168.2.54:8001/ws
+  wamp_http: http://192.168.2.54:8001/call
   wamp_realm: test_realm
   address_root: observatory
   registry_address: observatory.registry
 
 hosts:
 
-  localhost: {
+  beaglebone-cap: {
     'log-dir': './logs',
     'agent-paths': [
-        '../../'
+        '../agent'
         ],
     'agent-instances': [
       {'agent-class': 'CapSensorAgent',
