@@ -1,6 +1,20 @@
 import numpy as np
 import csv
 
+def calibrate_cmd(cal_file, caps, dists):
+    regions, minimum_sample = None, None
+    generated = False
+    def cmd(inp):
+        if regions is None:
+            
+        regions = input("Regions: (HELP for help)").split()
+        if regions == "HELP":
+            print("Each region's lower bound (of distance), in descending order (0 if single region)")
+            break
+        
+
+
+
 
 def generate_cal(caps, dists, regions, minimum_sample):
     """regions are each region's lower bound (of distance), in descending order"""

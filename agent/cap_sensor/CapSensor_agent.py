@@ -3,9 +3,8 @@ import os
 import argparse
 import warnings
 
-from FDC1004 import Chip, Measurement
-from Cap import CapDist
-import inverse_segmented_fit
+from CapSensor.FDC1004 import Chip
+from CapSensor.calibration.cal import meas_cap_builder
 from statistics import mean
 import csv
 
@@ -16,23 +15,6 @@ if not on_rtd:
 
 POLL_FREQUENCY = 300
 SEND_FREQUENCY = 0.2
-
-def meas_cap_builder():
-    TIME_INTERVALS = [1 ,10]
-    meas_cap = {}
-
-    ch1 = Measurement(1)
-    ch1.config(0)
-    cal1 = [CapDist(["cal.csv"], TIME_INTERVALS)]
-    meas_cap[ch1] = cal1
-
-    ch2 = Measurement(2)
-    ch2.config(1)
-    cal2 = [CapDist(["cal.csv"], TIME_INTERVALS)]
-    meas_cap[ch2] = cal2
-
-    return meas_cap
-
 
 class CapSensor_Agent:
     def __init__(self, agent):
@@ -200,6 +182,7 @@ class CapSensor_Agent:
                 writer.writerow([start_time, meas_num, dist, avg_cap])
 
         return True, "Meas {} calibrated at time {}".format(meas_num, start_time)
+
 
 def make_parser(parser=None):
     if parser is None:

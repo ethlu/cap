@@ -1,8 +1,7 @@
-import inverse_segmented_fit 
 from statistics import mean
 
 class CapDist:
-    def __init__(self, cal_args, time_intervals, fit=inverse_segmented_fit):
+    def __init__(self, cal_args, time_intervals, fit):
         self.fit = fit
         if len(cal_args) == 1:
             self.cal = fit.read_cal(cal_args[0])

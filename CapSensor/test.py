@@ -1,4 +1,5 @@
 from FDC1004 import Chip, Measurement
+import inverse_segmented_fit as fit
 from Cap import CapDist
 import time
 from statistics import mean, variance
@@ -29,7 +30,7 @@ print("3 data", data2)
 print("2 data", data1)
 
 """
-cap = CapDist(["cal.csv"], [1,0.4])
+cap = CapDist(["calibration/cal.csv"], [1,0.4], fit)
 POLL_FREQ = 100
 
 i = 1

@@ -34,6 +34,8 @@ def my_script(app, pargs):
     print("Start offsetting")
     yield cap_ops['offset'].start(params = offset_params)
     yield cap_ops['offset'].wait()
+    status = yield cap_ops['offset'].status()
+    print(status)
 
     #print("Stopping Data Acquisition")
     #yield cap_ops['acq'].stop()
