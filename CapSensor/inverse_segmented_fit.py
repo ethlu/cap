@@ -1,19 +1,24 @@
 import numpy as np
 import csv
 
-def calibrate_cmd(cal_file, caps, dists):
-    regions, minimum_sample = None, None
-    generated = False
-    def cmd(inp):
-        if regions is None:
-            
-        regions = input("Regions: (HELP for help)").split()
-        if regions == "HELP":
-            print("Each region's lower bound (of distance), in descending order (0 if single region)")
-            break
-        
-
-
+def generate_cmd(caps, dists):
+    state = 0
+    while True:
+        if state == 0:
+            inp = input("Regions: (HELP for help)")
+            if inp == "HELP":
+                print("Each region's lower bound (of distance), in descending order (0 if single region)")
+                continue
+            regions = inp.split()
+            state = 1
+        if state == 1:
+            min_sample = input("Minimum Samples:")
+            try:
+                return generate_cal(caps, dists, regions, min_sample)
+            except Exception as e:
+                print(e)
+                state = 0
+                continue
 
 
 def generate_cal(caps, dists, regions, minimum_sample):

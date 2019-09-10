@@ -1,7 +1,10 @@
 from statistics import mean
+import CapSensor.inverse_segmented_fit as inverse_fit
+
+FITS = {"inverse": inverse_fit}
 
 class CapDist:
-    def __init__(self, cal_args, time_intervals, fit):
+    def __init__(self, cal_args, time_intervals, fit = inverse_fit):
         self.fit = fit
         if len(cal_args) == 1:
             self.cal = fit.read_cal(cal_args[0])
