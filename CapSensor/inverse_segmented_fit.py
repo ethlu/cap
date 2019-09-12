@@ -5,14 +5,15 @@ def generate_cmd(caps, dists):
     state = 0
     while True:
         if state == 0:
-            inp = input("Regions: (HELP for help)")
+            inp = input("Regions: [HELP for help]\n")
             if inp == "HELP":
-                print("Each region's lower bound (of distance), in descending order (0 if single region)")
+                print("""Each region's lower bound (of distance),
+                    in descending order separated by space (0 if single region)""")
                 continue
-            regions = inp.split()
+            regions = list(map(float, inp.split()))
             state = 1
         if state == 1:
-            min_sample = input("Minimum Samples:")
+            min_sample = int(input("Minimum sample size (in each region):\n"))
             try:
                 return generate_cal(caps, dists, regions, min_sample)
             except Exception as e:
