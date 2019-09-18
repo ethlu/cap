@@ -4,12 +4,13 @@ import CapSensor.inverse_segmented_fit as inverse_fit
 FITS = {"inverse": inverse_fit}
 
 class CapDist:
-    def __init__(self, cal_args, time_intervals, fit = inverse_fit):
+    def __init__(self, cal_file, time_intervals, fit = inverse_fit, name = None):
         self.fit = fit
-        if len(cal_args) == 1:
-            self.cal = fit.read_cal(cal_args[0])
+        self.cal = fit.read_cal(cal_file)
+        if name is None:
+            self.name = "capdist"
         else:
-            self.cal = fit.generate_cal(*cal_args)
+            self.name = name
         self.init = False
         self.offset = 0
         self.origin = 0

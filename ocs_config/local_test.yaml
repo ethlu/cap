@@ -25,6 +25,7 @@ hosts:
        'arguments': []},
       {'agent-class': 'CapSensorAgent',
        'instance-id': 'cap',
-       'arguments': [["mode", "acq"]]},
+       'arguments': [["mode", "acq"],
+                     ["config", "test.yaml"]]},
     ]
   }

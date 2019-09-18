@@ -4,7 +4,7 @@ import argparse
 import warnings
 
 from CapSensor.FDC1004 import Chip
-from CapSensor.calibration.cal import meas_cap_builder
+from CapSensor.calibrate import meas_cap_builder
 from statistics import mean
 import csv
 
@@ -17,10 +17,10 @@ POLL_FREQUENCY = 300
 SEND_FREQUENCY = 0.2
 
 class CapSensor_Agent:
-    def __init__(self, agent):
+    def __init__(self, agent, config_file):
         self.agent = agent
         self.lock = TimeoutLock()
-        self.meas_cap = meas_cap_builder()
+        self.meas_cap = meas_cap_builder(config_file)
 
         agg_params = {
             'frame_length': 60,
@@ -98,7 +98,7 @@ class CapSensor_Agent:
 
                         cap_data['block_name'] = cap_name
                         cap_data['timestamps'] = timeline
-                        cap_data['data'] = {cap_name: caps}
+                        cap_data['data'] = {meas.name: caps}
                         self.agent.publish_to_feed(cap_name, cap_data)
 
                         for n, capdist in enumerate(capdists):
@@ -111,7 +111,7 @@ class CapSensor_Agent:
                                 dist_name = "Dist{}_Cal{}_Intvl{}".format(meas.num, n, i)
                                 dist_data['block_name'] = dist_name
                                 dist_data['timestamps'] = intvl[1]
-                                dist_data['data'] = {dist_name: intvl[0]}
+                                dist_data['data'] = {capdist.name: intvl[0]}
                                 self.agent.publish_to_feed(dist_name, dist_data)
                     i = 0
 
@@ -143,6 +143,7 @@ class CapSensor_Agent:
         min_sample = params.get('min_sample', 100)
         set_origin = params.get('set_origin', False)
         logfile = params.get('logfile', None)
+        record = params.get('record', True)
 
         session.set_status('running')
         capdists = self.meas_cap.pop(meas)
@@ -165,11 +166,15 @@ class CapSensor_Agent:
             self.meas_cap[meas] = capdists
             return False, 'try again'
 
+        agg_params = {
+            'frame_length': 60,
+        }
         for n, capdist in enumerate(capdists):
             if not capdist.init:
                 for i in range(len(capdist.avgs) + 1):
                     self.agent.register_feed("Dist{}_Cal{}_Intvl{}".format(meas_num, n, i),
-                        record = True)
+                        record=record,
+                        agg_params=agg_params)
             capdist.set_offset(avg_cap, dist)
             if set_origin:
                 capdist.set_origin(dist)
@@ -191,6 +196,8 @@ def make_parser(parser=None):
     pgroup = parser.add_argument_group('Agent Config')
     pgroup.add_argument('--mode', type=str, choices=['idle', 'init', 'acq'],
                         help="Starting action for the agent.")
+    pgroup.add_argument('--config', type=str,
+                        help="Config file for the agent.")
 
     return parser
 
@@ -212,7 +219,7 @@ def main():
 
     agent, runner = ocs_agent.init_site_agent(args)
 
-    kwargs = {}
+    kwargs = {"config_file": args.config}
 
     cap = CapSensor_Agent(agent, **kwargs)
 

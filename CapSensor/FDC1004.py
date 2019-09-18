@@ -1,4 +1,4 @@
-from smbus2 import SMBusWrapper
+#from smbus2 import SMBusWrapper
 import struct
 
 class Chip:
@@ -59,9 +59,13 @@ class Measurement:
     MSB_regs = (0x00, 0x02, 0x04, 0x06)
     LSB_regs = (0x01, 0x03, 0x05, 0x07)
 
-    def __init__(self, meas_num): 
+    def __init__(self, meas_num, name = None): 
         assert 1 <= meas_num <= 4
         self.num = meas_num
+        if name is None:
+            self.name = "cap" + str(meas_num)
+        else:
+            self.name = name
         self.config_reg = Measurement.config_regs[meas_num - 1]
         self.MSB_reg = Measurement.MSB_regs[meas_num - 1]
         self.LSB_reg = Measurement.LSB_regs[meas_num - 1]
