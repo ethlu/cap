@@ -26,10 +26,15 @@ class CapSensor_Agent:
             'frame_length': 60,
         }
 
-        for meas in self.meas_cap:
+        for meas, capdists in self.meas_cap.items():
             self.agent.register_feed("Cap{}".format(meas.num),
                     record=True,
                     agg_params=agg_params)
+            for n, capdist in enumerate(capdists):
+                for i in range(len(capdist.avgs) + 1):
+                    self.agent.register_feed("Dist{}_Cal{}_Intvl{}".format(meas.num, n, i),
+                        record=True,
+                        agg_params=agg_params)
 
         self.initialized = False
         self.take_data = False
@@ -143,7 +148,6 @@ class CapSensor_Agent:
         min_sample = params.get('min_sample', 100)
         set_origin = params.get('set_origin', False)
         logfile = params.get('logfile', None)
-        record = params.get('record', True)
 
         session.set_status('running')
         capdists = self.meas_cap.pop(meas)
@@ -165,26 +169,20 @@ class CapSensor_Agent:
         if not done:
             self.meas_cap[meas] = capdists
             return False, 'try again'
-
-        agg_params = {
-            'frame_length': 60,
-        }
+        
         for n, capdist in enumerate(capdists):
-            if not capdist.init:
-                for i in range(len(capdist.avgs) + 1):
-                    self.agent.register_feed("Dist{}_Cal{}_Intvl{}".format(meas_num, n, i),
-                        record=record,
-                        agg_params=agg_params)
             capdist.set_offset(avg_cap, dist)
             if set_origin:
                 capdist.set_origin(dist)
+            else:
+                capdist.set_origin(0)
 
         self.meas_cap[meas] = capdists
 
         if logfile is not None:
             with open(logfile, 'a') as f:
                 writer = csv.writer(f)
-                writer.writerow([start_time, meas_num, dist, avg_cap])
+                writer.writerow([start_time, wait_time, meas_num, dist, avg_cap, set_origin])
 
         return True, "Meas {} calibrated at time {}".format(meas_num, start_time)
 

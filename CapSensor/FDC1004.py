@@ -1,4 +1,4 @@
-#from smbus2 import SMBusWrapper
+from smbus2 import SMBusWrapper
 import struct
 
 class Chip:

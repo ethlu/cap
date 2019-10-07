@@ -80,8 +80,11 @@ class CapDist:
                     while self.times[j] - self.times[i] > self.t_int:
                         j -= 1
                     self.i_interval = j - i
-                start_times.append(self.times[i])
-                dists.append(mean(self.dists[i:j]))
+                try:
+                    dists.append(mean(self.dists[i:j]))
+                    start_times.append(self.times[i])
+                except Exception:
+                    pass 
                 i = j
                 j += self.i_interval
             self.times = self.times[i:]
