@@ -1,11 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from CapSensor.FDC1004 import Chip, Measurement
+#from CapSensor.FDC1004 import Chip, Measurement
 from CapSensor.Cap import FITS, CapDist
 from statistics import mean, variance
 import time, os, csv, yaml 
 
-CAL_DIR = os.path.dirname(os.path.realpath(__file__)) + "/calibration/"
+CAL_DIR = os.path.dirname(os.path.realpath(__file__)) + "/calibration/vice/"
 POLL_DELAY = 1/300
 
 def sample_cmd(meas_dir_name):
@@ -18,10 +18,35 @@ def sample_cmd(meas_dir_name):
     sample_t = int(input("Sample time (for each acquisition, in seconds):\n"))
     sample_i = round(sample_t / POLL_DELAY / 2.5)
     delay_t = int(input("Delay time (before each acquisition, in seconds):\n"))
+    inc = input("Sample in fixed increments? [y/N]\n").upper()
+    if inc == "Y":
+        inc = float(input("Increment (mm):\n"))
+        dist = float(input("Start distance (mm):\n")) - inc
+    else:
+        inc = None
 
     dists, caps = [], []
     while True:
-        dist = input("Dist (mm): [END if finished sampling]\n")
+        if inc is None:
+            dist = input("Dist (mm): [END if finished sampling]\n")
+        else:
+            dist += inc
+            adj = input("Next dist is {} mm. Proceed? [Y/n]\n".format(dist)).upper()
+            if adj == "N":
+                newdist = input("Dist (mm): [END if finished sampling, Return if same]\n")
+                if newdist != "END":
+                    dist -= inc
+                    if newdist:
+                        dist = newdist
+                    newinc = input("Increment (mm): [Return if same]\n")
+                    if newinc:
+                        inc = float(newinc)
+                    if not newdist:
+                        dist += inc
+                    print("Next dist is {} mm.\n".format(dist))
+                else:
+                    dist = "END"
+
         if dist == "END":
             print("Number of samples: {}".format(len(dists)))
             plot_data = input("Plot calibration data? [Y/n]\n").upper()
@@ -42,6 +67,7 @@ def sample_cmd(meas_dir_name):
                     writer.writerows([caps, dists])
                 print("Data file {} written.".format(filename))
             break
+        dist = float(dist)
         print("Starting acquisition in {}".format(delay_t))
         time.sleep(delay_t)
         print("Start!")
@@ -49,14 +75,22 @@ def sample_cmd(meas_dir_name):
             chip.poll()
             time.sleep(POLL_DELAY)
         samples, _ = meas.get_data()
-        cap_sample = mean(samples)
+        try:
+            cap_sample = mean(samples)
+        except Exception:
+            print("mean failed (not enough sample?)")
+            continue
         print("Sample mean: {}, SD: {}, size: {}".format(cap_sample, variance(samples)**0.5, len(samples)))
         cmd = input("Keep this sample?: [Y/n]\n").upper()
         if cmd != "N":
-            dists.append(float(dist))
+            dists.append(dist)
             caps.append(cap_sample)
             print("Saved")
+        else:
+            if inc is not None:
+                dist -= inc
 
+    print("Finished the measurement; now fitting it")
     fit_cmd(meas_dir_name, caps, dists)
 
 def fit_cmd(meas_dir_name, caps, dists):
@@ -131,7 +165,11 @@ def examine_cmd(meas_dir_name):
         else:
             files = os.listdir(meas_dir_name)
             while True:
-                cal_name = input("Calibration name: [END to stop examining]\n")
+                while True:
+                    cal_name = input("Calibration name: [END to stop examining, ls to list existing]\n")
+                    if cal_name != "ls":
+                        break
+                    print([f[:f.rfind('_')] for f in files if f.rfind('_') != -1])
                 if cal_name == "END":
                     break
                 cal_name.replace(" ", "_")
@@ -156,25 +194,36 @@ def examine_cmd(meas_dir_name):
                             print("Error while plotting: {}".format(e))
 
 def plot_calibration(cal = None, fit = None, caps = None, dists = None):
-    plt.close()
-    plt.clf()
+    plt.figure(1)
+    plt.ylabel('dists (mm)')
+    plt.xlabel('caps (pF)')
+    plt.figure(2)
+    plt.xlabel('dists (mm)')
+    plt.ylabel('caps (pF)')
     if caps is not None:
+        plt.figure(1)
         plt.plot(caps, dists, 'ro')
+        plt.figure(2)
+        plt.plot(dists, caps, 'ro')
     if cal is not None:
         offset = []
         for cap, dist in zip(caps, dists):
             offset.append(fit.cap_offset(cal, cap, dist))
         offset = mean(offset)
         caps_sorted = sorted(caps)
-        plot_min = offset * 1.01
+        plot_min = min(caps_sorted[0], offset * 1.01)
         plot_max = offset + (caps_sorted[-1] - offset) * 2
         step = (plot_max - plot_min) / 100
         c = np.arange(plot_min, plot_max, step)
         c_offseted = np.arange(plot_min - offset, plot_max - offset, step)
         dist_func = np.vectorize(fit.dist_estimate, excluded=['cal'])
         d = dist_func(cal=cal, cap_offsetted=c_offseted)
+        plt.figure(1)
         plt.plot(c, d)
-    plt.show(block=False)
+        plt.figure(2)
+        plt.plot(d, c)
+    print("Close Figures to Proceed")
+    plt.show()
 
 def eval_calibration(cal, fit, caps, dists):
     print("Cal: {}".format(cal))
@@ -216,13 +265,15 @@ def meas_cap_builder(config_file):
     return meas_cap
 
 
-
-
-
 if __name__ == "__main__":
     while True:
         opt = int(input("Menu: [1: New measurement, 2: Check out existing measurement]\n"))
-        meas_name = input("Measurement name: ")
+        while True:
+            meas_name = input("Measurement name: [ls to list existing]\n")
+            if meas_name != "ls":
+                break
+            print([f.name for f in os.scandir(CAL_DIR) if f.is_dir()])
+
         meas_name.replace(" ", "_")
         meas_dir_name = CAL_DIR + meas_name + '/'
         if opt == 1:
