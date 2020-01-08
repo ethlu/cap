@@ -5,7 +5,7 @@ from CapSensor.Cap import FITS, CapDist
 from statistics import mean, variance
 import time, os, csv, yaml 
 
-CAL_DIR = os.path.dirname(os.path.realpath(__file__)) + "/calibration/vice/"
+CAL_DIR = os.path.dirname(os.path.realpath(__file__)) + "/calibration/"
 POLL_DELAY = 1/300
 
 def sample_cmd(meas_dir_name):
@@ -104,14 +104,18 @@ def fit_cmd(meas_dir_name, caps, dists):
             if fit == "OPT":
                 print("Available fit types: "+", ".join(FITS.keys()))
                 continue
-            cal_name += "_" + fit
-            try:
+            if fit in FITS:
+                cal_name += "_" + fit
                 fit = FITS[fit]
-            except KeyError:
+            else:
                 print("Fit type {} not found".format(fit))
                 continue
             break
-        cal = fit.generate_cmd(caps, dists)
+        try:
+            cal = fit.generate_cmd(caps, dists)
+        except Exception as e:
+            print(e)
+            continue
         eval_calibration(cal, fit, caps, dists)
         plot = input("Plot the calibration? [Y/n] \n").upper()
         if plot != "N":
@@ -210,9 +214,8 @@ def plot_calibration(cal = None, fit = None, caps = None, dists = None):
         for cap, dist in zip(caps, dists):
             offset.append(fit.cap_offset(cal, cap, dist))
         offset = mean(offset)
-        caps_sorted = sorted(caps)
-        plot_min = min(caps_sorted[0], offset * 1.01)
-        plot_max = offset + (caps_sorted[-1] - offset) * 2
+        plot_min = offset + fit.cap_offsetted_estimate(cal, max(dists) * 1.5)
+        plot_max = offset + (max(caps) - offset) * 1.5
         step = (plot_max - plot_min) / 100
         c = np.arange(plot_min, plot_max, step)
         c_offseted = np.arange(plot_min - offset, plot_max - offset, step)
@@ -237,8 +240,23 @@ def eval_calibration(cal, fit, caps, dists):
     for cap, dist in zip(caps, dists):
         est = fit.dist_estimate(cal, cap - offset)
         print("Actual dist: {}, Estimate: {}".format(dist, est))
+        if est is None or est < 0:
+            print("Nonsensical estimate, ignored")
+            continue
         squared_error += (dist - est)**2
-    print("RMS error: {} (mm)".format((squared_error/len(caps))**0.5))
+    print("RMS error w/ mean offset: {} (mm)".format((squared_error/len(caps))**0.5))
+
+    mid_ind = int(len(caps)/2)
+    offset = fit.cap_offset(cal, caps[mid_ind], dists[mid_ind]) 
+    squared_error = 0
+    for cap, dist in zip(caps, dists):
+        est = fit.dist_estimate(cal, cap - offset)
+        print("Actual dist: {}, Estimate: {}".format(dist, est))
+        if est is None or est < 0:
+            print("Nonsensical estimate, ignored")
+            continue
+        squared_error += (dist - est)**2
+    print("RMS error w/ single offset: {} (mm)".format((squared_error/len(caps))**0.5))
 
 def meas_cap_builder(config_file):
     meas_cap = {}

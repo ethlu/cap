@@ -1,10 +1,10 @@
 from statistics import mean
-import CapSensor.inverse_segmented_fit as inverse_fit
-
-FITS = {"inverse": inverse_fit}
+from CapSensor import inverse_segmented_fit, inverse_higher_fit
+FITS = {"segmented": inverse_segmented_fit,
+        "higher": inverse_higher_fit}
 
 class CapDist:
-    def __init__(self, cal_file, time_intervals, fit = inverse_fit, name = None):
+    def __init__(self, cal_file, time_intervals, fit, name = None):
         self.fit = fit
         self.cal = fit.read_cal(cal_file)
         if name is None:
