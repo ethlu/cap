@@ -1,53 +1,55 @@
 import numpy as np
-from scipy.optimize import curve_fit
 import csv
 
 def generate_cmd(caps, dists):
-    order = int(input("Degree of inverse polynomial: \n"))
-    cons = ([],[])
-    p0 = []
-    for o in range(order+1):
-        inp = input("Bounds and initial value on {}th order coefficient: "
-        "[min max initial] (default is non-negative and 1)\n".format(o))
-        if not inp:
-            cons[0].append(0)
-            cons[1].append(np.inf)
-            p0.append(1)
-        else:
-            lower = float(inp.split()[0])
-            upper = float(inp.split()[1])
-            if lower == upper:
-                upper += 1E-10
-            cons[0].append(lower)
-            cons[1].append(upper)
-            p0.append(float(inp.split()[2]))
-    return generate_cal(caps, dists, order, cons, p0)
+    try:
+        order = int(input("Degree of inverse polynomial: [2]\n"))
+    except Exception:
+        order = 2 
+    inp = input("Model the object when it's floating (assuming it's currently grounded)? [y/N]\n").upper()
+    cap_obj = () 
+    if inp == "Y":
+        try:
+            c_og = float(input("Object's capacitance to ground (pF): [200]\n"))
+        except Exception:
+            c_og = 200 
+        try:
+            c_os = float(input("Object's capacitance to shield (pF): [1]\n"))
+        except Exception:
+            c_os = 1
+        cap_obj = (c_og, c_os)
+    return generate_cal(caps, dists, order, cap_obj)
 
-def generate_cal(caps, dists, order = 3, cons = (0, np.inf), p0 = None):
-    if p0 is None:
-        p0 = np.ones(order+1)
-    def func(*argv):
-        argv = list(argv)
-        p = np.poly1d(argv[:0:-1])
-        return p(argv[0])
-    inverse_dists = np.reciprocal(dists)
-    fit, _ = curve_fit(func, inverse_dists, caps, p0, bounds = cons)
-    fit = [c if abs(c) > 1E-10 else 0 for c in fit]
-    return fit[1:]
+def generate_cal(caps, dists, order = 2, cap_obj = ()):
+    X = []
+    for d in dists:
+        X.append([d**(-i) for i in range(order + 1)])
+    fit, res, _, _ = np.linalg.lstsq(X, caps, None) 
+    fit = [round(c, 6) for c in fit]
+    return fit[1:], cap_obj
 
 def dist_estimate(cal, cap_offsetted):
-    p = [cap_offsetted] + [-c for c in cal]
+    cal, cap_obj = cal
+    if not cap_obj:
+        p = [cap_offsetted] + [-c for c in cal]
+    else:
+        c_og, c_os = cap_obj
+        p = [cap_offsetted*(c_og+c_os)/(c_og-cap_offsetted)] + [-c for c in cal]
     roots = np.roots(p)
     for r in roots:
         if np.isreal(r) and r>0:
             return float(r)
 
 def cap_offsetted_estimate(cal, dist):
+    cal, cap_obj = cal
     inverse_dist = 1.0/dist 
     order, ret = 1, 0
     for c in cal:
         ret += c * (inverse_dist ** order)
         order += 1
+    if cap_obj:
+        c_og, c_os = cap_obj
+        ret = ret * c_og/(ret + c_og + c_os)
     return ret
 
 def cap_offset(cal, cap, dist):
@@ -56,13 +58,14 @@ def cap_offset(cal, cap, dist):
 def write_cal(cal, cal_file):
     with open(cal_file, "w") as f:
         writer = csv.writer(f)
-        writer.writerow(cal)
+        writer.writerows(cal)
 
 def read_cal(cal_file):
     with open(cal_file, "r") as f:
         reader = csv.reader(f)
-        row = next(reader)
-        return [float(x) for x in row]
+        row = list(map(float, next(reader)))
+        cap_obj = list(map(float, next(reader)))
+        return [float(x) for x in row], cap_obj 
 
 
 if __name__ == "__main__":

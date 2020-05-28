@@ -41,9 +41,6 @@ class CapDist:
     def dist_estimate(self, cap):
         return self.fit.dist_estimate(self.cal, cap - self.offset) - self.origin
 
-    def dists_estimate(self, caps):
-        return self.fit.dists_estimate(self.cal, caps, self.offset)
-
     class DistAvg:
         time_interval_error = 0.1
         def __init__(self, time_interval):

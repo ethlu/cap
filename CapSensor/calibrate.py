@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-#from CapSensor.FDC1004 import Chip, Measurement
+from CapSensor.FDC1004 import Chip, Measurement
 from CapSensor.Cap import FITS, CapDist
 from statistics import mean, variance
 import time, os, csv, yaml 
@@ -15,9 +15,15 @@ def sample_cmd(meas_dir_name):
     chip = Chip([meas])
     chip.trigger()
 
-    sample_t = int(input("Sample time (for each acquisition, in seconds):\n"))
-    sample_i = round(sample_t / POLL_DELAY / 2.5)
-    delay_t = int(input("Delay time (before each acquisition, in seconds):\n"))
+    try:
+        sample_t = float(input("Sample time (for each acquisition, in seconds): [3]\n"))
+    except Exception:
+        sample_t = 3
+    sample_i = round(sample_t / chip.poll_delay / 2.5)
+    try:
+        delay_t = float(input("Delay time (before each acquisition, in seconds): [0]\n"))
+    except Exception:
+        delay_t = 0
     inc = input("Sample in fixed increments? [y/N]\n").upper()
     if inc == "Y":
         inc = float(input("Increment (mm):\n"))
@@ -30,20 +36,22 @@ def sample_cmd(meas_dir_name):
         if inc is None:
             dist = input("Dist (mm): [END if finished sampling]\n")
         else:
-            dist += inc
+            dist = round(dist+inc, 8)
             adj = input("Next dist is {} mm. Proceed? [Y/n]\n".format(dist)).upper()
             if adj == "N":
-                newdist = input("Dist (mm): [END if finished sampling, Return if same]\n")
+                newdist = input("Dist (mm): [END if finished sampling, Return if same as last]\n")
                 if newdist != "END":
                     dist -= inc
                     if newdist:
-                        dist = newdist
+                        dist = float(newdist)
                     newinc = input("Increment (mm): [Return if same]\n")
                     if newinc:
                         inc = float(newinc)
-                    if not newdist:
-                        dist += inc
-                    print("Next dist is {} mm.\n".format(dist))
+                        if newdist:
+                            dist -= inc
+                    else:
+                        dist -= inc
+                    continue
                 else:
                     dist = "END"
 
@@ -67,14 +75,15 @@ def sample_cmd(meas_dir_name):
                     writer.writerows([caps, dists])
                 print("Data file {} written.".format(filename))
             break
-        dist = float(dist)
+        try:
+            dist = float(dist)
+        except Exception:
+            print("invalid dist")
+            continue
         print("Starting acquisition in {}".format(delay_t))
         time.sleep(delay_t)
         print("Start!")
-        for i in range(sample_i):
-            chip.poll()
-            time.sleep(POLL_DELAY)
-        samples, _ = meas.get_data()
+        samples = chip.acq(sample_i)[1]
         try:
             cap_sample = mean(samples)
         except Exception:
@@ -86,9 +95,6 @@ def sample_cmd(meas_dir_name):
             dists.append(dist)
             caps.append(cap_sample)
             print("Saved")
-        else:
-            if inc is not None:
-                dist -= inc
 
     print("Finished the measurement; now fitting it")
     fit_cmd(meas_dir_name, caps, dists)
@@ -218,7 +224,7 @@ def plot_calibration(cal = None, fit = None, caps = None, dists = None):
         plot_max = offset + (max(caps) - offset) * 1.5
         step = (plot_max - plot_min) / 100
         c = np.arange(plot_min, plot_max, step)
-        c_offseted = np.arange(plot_min - offset, plot_max - offset, step)
+        c_offseted = np.linspace(plot_min - offset, plot_max - offset, len(c))
         dist_func = np.vectorize(fit.dist_estimate, excluded=['cal'])
         d = dist_func(cal=cal, cap_offsetted=c_offseted)
         plt.figure(1)

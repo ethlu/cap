@@ -1,12 +1,14 @@
 from smbus2 import SMBusWrapper
+import time
 import struct
+from statistics import mean
 
 class Chip:
     config_reg = 0x0C
-
-    def __init__(self, measurements, measure_rate=0b01):
+    def __init__(self, measurements, measure_rate=0b01, poll_delay = 1/300):
         self.meas = {m.num: m for m in measurements}
         self.rate = measure_rate
+        self.poll_delay = poll_delay
         self.reset()
 
     def trigger(self):
@@ -46,6 +48,50 @@ class Chip:
         reg_write(Chip.config_reg, 1<<15)
         self._write_configs()
 
+    def cal_CAPDAC(self, meas_num):
+        """ 
+        Auto ranging measurements by adjusting CAPDAC value.
+        Since the CAPDAC might not be perfect and there could be some offset introduced,
+        the function attempts to keep most measurements (that are not b/t the upper and lower bound) in one particular range.
+        inc: increment of CAPDAC, corresponding to ranges of size inc * 3.125pF.
+        upper: the upper limit of a range (lower < upper < 16) above which the range will increment
+        lower: the lower limit below which the reading must not be done in a range above
+        """
+        m = self.meas[meas_num]
+        if m.CHB != 0b100: #if the measurement is not already in CAPDAC mode, do nothing.
+            return
+        inc = 5
+        upper = 15.7
+        lower = 15.6
+        while True:
+            for _ in range(20):
+                self.poll()
+                time.sleep(self.poll_delay)
+            test_data = mean(m.get_data()[0][1:]) - m.CAPDAC*3.125
+            for _ in self.meas.values():
+                _.get_data()
+            if test_data > upper:
+                m.config(m.CHA, 0b100, min(31, m.CAPDAC+inc))
+            elif test_data < lower-inc*3.125:
+                m.config(m.CHA, 0b100, max(0, m.CAPDAC-inc))
+            else:
+                return
+            m._write_config()
+            if m.CAPDAC >= 31 or m.CAPDAC <= 0:
+                return
+
+    def acq(self, num_polls):
+        self.trigger()
+        for n in self.meas.keys():
+            self.cal_CAPDAC(n)
+        for _ in range(num_polls):
+            self.poll()
+            time.sleep(self.poll_delay)
+        data = {}
+        for n in self.meas.keys():
+            data[n] = self.get_data(n)[0]
+        return data
+
     def _write_configs(self):
         for m in self.meas.values():
             m._write_config()
@@ -72,7 +118,7 @@ class Measurement:
         self.data = []
         self.timeline = []
 
-    def config(self, CHA, CHB=0b111, CAPDAC=0b00000):
+    def config(self, CHA, CHB=0b100, CAPDAC=0b00000):
         self.CHA = CHA
         self.CHB = CHB
         self.CAPDAC = CAPDAC
@@ -97,7 +143,7 @@ class Measurement:
         else:
             cap = twos/(2**19)
 
-        self.data.append(cap)
+        self.data.append(cap + self.CAPDAC*3.125)
         self.timeline.append(time)
         
 
