@@ -13,7 +13,7 @@ if not on_rtd:
     from ocs import ocs_agent, site_config
     from ocs.ocs_twisted import TimeoutLock
 
-POLL_FREQUENCY = 300
+POLL_FREQUENCY = 1000
 SEND_FREQUENCY = 0.2
 
 class CapSensor_Agent:

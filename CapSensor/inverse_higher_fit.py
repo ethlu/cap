@@ -14,9 +14,9 @@ def generate_cmd(caps, dists):
         except Exception:
             c_og = 200 
         try:
-            c_os = float(input("Object's capacitance to shield (pF): [1]\n"))
+            c_os = float(input("Object's capacitance to shield (pF): [2]\n"))
         except Exception:
-            c_os = 1
+            c_os = 2
         cap_obj = (c_og, c_os)
     return generate_cal(caps, dists, order, cap_obj)
 
@@ -24,7 +24,11 @@ def generate_cal(caps, dists, order = 2, cap_obj = ()):
     X = []
     for d in dists:
         X.append([d**(-i) for i in range(order + 1)])
-    fit, res, _, _ = np.linalg.lstsq(X, caps, None) 
+    try:
+        from scipy.optimize import nnls
+        fit, res = nnls(X, caps) 
+    except Exception:
+        fit, res, _, _ = np.linalg.lstsq(X, caps, None) 
     fit = [round(c, 6) for c in fit]
     return fit[1:], cap_obj
 
@@ -63,9 +67,9 @@ def write_cal(cal, cal_file):
 def read_cal(cal_file):
     with open(cal_file, "r") as f:
         reader = csv.reader(f)
-        row = list(map(float, next(reader)))
+        cal = list(map(float, next(reader)))
         cap_obj = list(map(float, next(reader)))
-        return [float(x) for x in row], cap_obj 
+        return [cal, cap_obj]
 
 
 if __name__ == "__main__":
